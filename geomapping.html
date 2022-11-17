@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+.counties {
+  fill: none;
+}
+
+.states {
+  fill: none;
+  stroke: #fff;
+  stroke-linejoin: round;
+}
+
+/*Tooltip Type here*/
+#tooltip {
+  position: absolute;
+  background-color: transparent;
+  border-color: transparent;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 5px;
+  padding: 5px;
+  color: transparent;
+  pointer-events: none;
+}
+
+.hidden {
+  display: none;
+}
+
+.countryField {
+  text-align: center;
+}
+
+.toolField {
+  display: inline-block;
+  margin: 0px;
+}
+
+.nameField, .sizeField{
+  display: inline-block;
+  margin: 0px;
+  float: right;
+}
+
+</style>
+<h1 style = "text-align:center; color:steelblue">
+    <bold>West Virginia Population Density, 2022</bold>
+</h1>
+<div id="button1">
+    <input name="toggleButton" type= "button" value="Toggle Boundaries" onclick="toggleBoundaries()"/>
+</div>
+<div id="button2">
+    <input name="toggleButton" type= "button" value="Toggle Color" onclick="toggleColor()"/>
+</div>
+
+<svg width="960" height="600"></svg>
+<script src="//d3js.org/d3.v4.min.js"></script>
+<script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+<script src="//d3js.org/topojson.v1.min.js"></script>
+
+<script>
+    
+    
+var iscolortoggled = false;
+
+function toggleColor(){
+    
+    if (iscolortoggled == false){
+        svg.selectAll("path#countries")
+     .attr("fill", function(d) { return color(rateById.get(d.id) * 10); });
+        iscolortoggled = true;
+    }else{
+        svg.selectAll("path#countries")
+     .attr("fill", function(d) { return color(rateById.get(d.id)); });
+        iscolortoggled = false;
+    }
+    
+}
+
+var isboundariestoggled = false;
+    
+function toggleBoundaries(){
+    if (isboundariestoggled == false){
+        svg.select("path#boundaries")
+      .attr("stroke-opacity", 0.0);
+        isboundariestoggled = true;
+    }else{
+        svg.select("path#boundaries")
+          .attr("stroke-opacity", 0.3);
+        isboundariestoggled = false;
+    }
+}
+    
+
+var toolTip = d3.select("body").append("div").attr("id","tooltip");
+    
+    //was given help here from Yera S
+    var toolFrame = " \xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0 ";
+    toolTip.html(
+                 "<div>" + 
+                    "<p class=\"toolField\">Name :</p>" +
+                    "<p class=\"nameField\"></p>" +
+                "</div>" +
+                "<div>" +
+                    "<p class=\"toolField\">Density :" + toolFrame +"</p>" +
+                    "<p class=\"sizeField\"></p>" +
+                "</div>"
+                
+                );
+
+var svg = d3.select("svg"),
+    width = +svg.attr("width"),
+    height = +svg.attr("height");
+
+var rateById = d3.map();
+var nameById = d3.map();
+    
+var svg = d3.select("svg"),
+    width = +svg.attr("width"),
+    height = +svg.attr("height");
+
+var path = d3.geoPath();
+
+var color = d3.scaleThreshold()
+    .domain([1, 10, 50, 200, 500, 1000, 2000, 4000])
+    .range(d3.schemeOrRd[9]);
+
+var x = d3.scaleSqrt()
+    .domain([0, 4500])
+    .rangeRound([440, 950]);
+
+var g = svg.append("g")
+    .attr("class", "key")
+    .attr("transform", "translate(0,40)");
+
+g.selectAll("rect")
+  .data(color.range().map(function(d) {
+      d = color.invertExtent(d);
+      if (d[0] == null) d[0] = x.domain()[0];
+      if (d[1] == null) d[1] = x.domain()[1];
+      return d;
+    }))
+  .enter().append("rect")
+    .attr("height", 8)
+    .attr("x", function(d) { return x(d[0]); })
+    .attr("width", function(d) { return x(d[1]) - x(d[0]); })
+    .attr("fill", function(d) { return color(d[0]); });
+
+g.append("text")
+    .attr("class", "caption")
+    .attr("x", x.range()[0])
+    .attr("y", -6)
+    .attr("fill", "#000")
+    .attr("text-anchor", "start")
+    .attr("font-weight", "bold")
+    .text("Population per square mile");
+
+g.call(d3.axisBottom(x)
+    .tickSize(13)
+    .tickValues(color.domain()))
+  .select(".domain")
+    .remove();
+
+var quantize = d3.scaleQuantize()
+    .domain([0, 0.15])
+    .range(d3.range(9).map(function(i) { return "q" + i + "-9"; }));
+
+var projection = d3.geoAlbersUsa()
+    .scale(1280)
+    .translate([width / 2, height / 2]);
+
+var path = d3.geoPath()
+    .projection(projection);
+
+d3.queue()
+    .defer(d3.json, "temp.json")
+    .defer(d3.csv, "WV-County-Data.csv", function(d) { rateById.set(d.id, +d.density); })
+    .defer(d3.csv, "WV-County-Data.csv", function(d) { nameById.set(d.id, d.countyName); })
+    .await(ready);
+
+function ready(error, us) {
+  if (error) throw error;
+
+  svg.append("g")
+      .attr("class", "counties")
+    .selectAll("path")
+      .data(topojson.feature(us, us.objects.counties).features)
+    .enter().append("path")
+    .attr('id', "countries")
+      .attr("fill", function(d) { return color(rateById.get(d.id)); })
+      .attr("d", path)
+      .on("mouseover", showToolTip)
+      .on("mouseout", function(d,i) {
+        toolTip.transition().duration(250).style("background-color", "transparent").style("border-color", "transparent").style("color", "transparent");
+       });
+
+  svg.append("path")
+      .datum(topojson.feature(us, us.objects.counties))
+      .attr("fill", "none")
+      .attr("stroke", "#000")
+      .attr('id', "boundaries")
+      .attr("stroke-opacity", 0.3)
+      .attr("d", path);
+    
+}
+    
+function showToolTip(d, i) {
+    d3.select("#toolTip").style("left", d3.event.pageX + "px").style("top", d3.event.pageY + "px")
+
+    toolTip.transition()
+        .duration(500)
+        //.style("background-color", colors(d.country))
+        .style("border-color", "black")
+        .style("color", "black");
+    d3.select(".nameField").text(nameById.get(d.id));
+    d3.select(".sizeField").text(rateById.get(d.id));
+};
+
+</script>
+<h4>Created by Connor Burd</h4>
+    
+    <h4>Instructor: Suresh Lodha</h4>
+    <p> A bar chart showing 16 countries GDP.</p>
+    <!-- Create a list using <ul> and <li> tag -->   
+    <h4>Files Submitted:</h4>
+    <ul>
+      <li>geomapping.html</li>
+      <li>temp.json</li>
+      <li>WV-Country-Data.csv</li>
+    </ul>
